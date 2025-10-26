@@ -1,62 +1,57 @@
-# PromptSL
-PromptSL is a prompt-learning framework based on Biomedical Large Language Models (LLMs) for context-specific synthetic lethality (SL) prediction.
+# PromptCASL
+
+**PromptCASL** is a prompt-driven, context-aware framework that leverages biomedical large language models (LLMs) for cell line-specific synthetic lethality (SL) prediction.
 
 ## Overview
 
-![PromptSL Overview](./PromptSL_overview.png)
+![PromptCASL Overview](./PromptCASL_pipeline.png)
 
 ## File Structure
+
 ```
-PromptSL
+PromptCASL
 ├── data
-│   ├── dataset_example
-│   ├── KG
-│   │   └── kge.py          
-│   ├── omics_data          
-│   ├── text_template       
-│   └── utils.py            
+│   ├── multi_omics/
+│   │   ├── multi_omics_emb_3_256.pkl
+│   │   └── cell_line_omics_data.json
+│   └── text_template_genes/
+|   └── datasets/
 ├── src
-│   ├── __pycache__         
-│   ├── data_loader.py      
-│   ├── data_prepare.py     
-│   ├── evaluate.py         
-│   ├── main.py             
-│   ├── model.py            
-│   ├── preprocess.py       
-│   └── train.py            
-├── environment.yml         
-├── LICENSE                 
-├── PromptSL_overview.png   
-└── README.md               
+│   ├── data_loader.py              
+│   ├── data_prepare.py             
+│   ├── eval.py                     
+│   ├── main.py                     
+│   ├── model.py                    
+│   ├── preprocess_datasets.py     
+│   └── train_model.py              
+├── env.yml                         
+├── PromptCASL_pipeline.png         
+└── README.md                       
 ```
 
 ## Requirements
-To set up the environment for PromptSL, use the provided `environment.yml` file. You can create the necessary Conda environment with the following commands:
+
+To set up the environment for PromptCASL, use the provided `env.yml` file. A CUDA-enabled GPU is strongly recommended for training and evaluation.
 
 ```bash
-conda env create -f environment.yml
-conda activate promptsl
+conda env create -f env.yml
+conda activate promptcasl
 ```
-A CUDA-enabled GPU is required to run the code efficiently. 
-
 
 ## Training and Evaluation
 
-### Training
-To train the PromptSL framework, run the `main.py` script. You can specify various hyperparameters using the command line or configuration files. Ensure that the paths to the datasets are correctly set in the `main.py` file. There is an example of datasets available at [link](https://drive.google.com/drive/folders/1tcxtx69bTsHhCxQUwp5WadV84vVG25Nd?usp=drive_link).
 
+To train and evaluate the PromptCASL framework, run the following command with appropriate hyperparameters and dataset paths:
 
-Example command:
 ```bash
-python -m src.main --cell_line all --predictor_lr 5e-4 --encoder_lr 1e-4 --projector_lr 1e-4 --om_encoder_lr 5e-4 --batch_size 16 --num_epochs 50 --early_stop_patience 6 --lr_patience 3 --weight_decay 1e-4 --device 0 
+python -m src.main --llm_lr 1e-5 --geneagg_lr 1e-4 --pred_lr 1e-4 --weight_decay 1e-5 --batch_size 24 --num_epochs 50 --early_stop_patience 6 --lr_patience 3 --device 1 --cell_line mixed --pred_in 4608 --omics_data 0 --omics_encoder 1
 ```
 
-### Evaluation
-To evaluate the trained model, use the `evaluate.py` script. 
+- `--llm_lr`, `--geneagg_lr`, and `--pred_lr` control learning rates for different model components  
+- `--omics_data` and `--omics_encoder` toggle omics usage and encoder mode
+- `--cell_line` specifies the training scenario (e.g., `mixed`, `mctl`, or a specific cell line)  
+- All paths and hyperparameters can be customized via command-line arguments or modified directly in `src/main.py`.
 
-Example command:
-```bash
-python -m src.evaluate 
-```
-The training results, logs, and saved models, as well as the evaluation results, will be saved in the `./save` folder. Ensure that the paths to the datasets and models are correctly set in the `evaluate.py` file.
+After training, evaluation metrics such as AUC and AUPR will be saved automatically in the `./save/` directory for each run. Note that the datasets used in this project are not included in this repository due to size limitations.
+
 
