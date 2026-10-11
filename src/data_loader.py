@@ -31,6 +31,7 @@ class GenePairDataset(Dataset):
 # torch.serialization.add_safe_globals([GenePairDataset])
 
 
+# def load_data_SCL(args, fold_idx):
 def load_data_SCL(dataset_path, cell_line, batch_size, negpos, fold_idx):
     """
     Load training and validation data for Single Cell Line Learning (SCL).
@@ -51,7 +52,7 @@ def load_data_SCL(dataset_path, cell_line, batch_size, negpos, fold_idx):
     fold_prefix = f"{cell_line}_F"
 
     # Load validation fold
-    val_dataset = torch.load(os.path.join(fold_dir, f"{fold_prefix}{fold_idx + 1}.pt"))
+    val_dataset = torch.load(os.path.join(fold_dir, f"{fold_prefix}{fold_idx + 1}.pt"), weights_only=False)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # Load and combine remaining folds for training
@@ -59,7 +60,7 @@ def load_data_SCL(dataset_path, cell_line, batch_size, negpos, fold_idx):
     for j in range(5):
         if j != fold_idx:
             fold_path = os.path.join(fold_dir, f"{fold_prefix}{j + 1}.pt")
-            train_datasets.append(torch.load(fold_path))
+            train_datasets.append(torch.load(fold_path, weights_only=False))
     
     train_dataset = ConcatDataset(train_datasets)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -67,7 +68,7 @@ def load_data_SCL(dataset_path, cell_line, batch_size, negpos, fold_idx):
     return val_loader, train_loader
 
 
-def load_data_MCL(dataset_path, cell_line_set, batch_size, negpos, fold_idx):
+def load_data_MCL(dataset_path, cell_line_set, batch_size, negpos, fold_idx): # no matter of which cell line is given
     """
     Load training and validation data for Multi Cell Line Learning (MCL), using fold_idx across all cell lines.
     For fold k, we use fold k from each cell line as validation, and all other folds from all cell lines as training.
@@ -94,14 +95,14 @@ def load_data_MCL(dataset_path, cell_line_set, batch_size, negpos, fold_idx):
         # Add validation fold
         val_path = os.path.join(fold_folder, f"{cell_line}_F{fold_idx + 1}.pt")
         if os.path.exists(val_path):
-            val_datasets.append(torch.load(val_path))
+            val_datasets.append(torch.load(val_path, weights_only=False))
 
         # Add all other folds to training set
         for j in range(5):
             if j != fold_idx:
                 train_path = os.path.join(fold_folder, f"{cell_line}_F{j + 1}.pt")
                 if os.path.exists(train_path):
-                    train_datasets.append(torch.load(train_path))
+                    train_datasets.append(torch.load(train_path, weights_only=False))
 
     train_dataset = ConcatDataset(train_datasets)
     val_dataset = ConcatDataset(val_datasets)
@@ -132,7 +133,7 @@ def load_data_MCTL(dataset_path, target_cell_lines, cell_line_set, negpos, batch
         for fold_idx in range(5):
             val_fold_path = os.path.join(dataset_path, f"{target_cell_line}_F{fold_idx + 1}.pt")
             if os.path.exists(val_fold_path):
-                val_datasets.append(torch.load(val_fold_path))
+                val_datasets.append(torch.load(val_fold_path, weights_only=False))
 
     val_dataset = ConcatDataset(val_datasets)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
@@ -143,12 +144,48 @@ def load_data_MCTL(dataset_path, target_cell_lines, cell_line_set, negpos, batch
         for fold_idx in range(5):
             fold_path = os.path.join(dataset_path, f"{cell_line}_F{fold_idx + 1}.pt")
             if os.path.exists(fold_path):
-                train_datasets.append(torch.load(fold_path))
+                train_datasets.append(torch.load(fold_path, weights_only=False))
 
     train_dataset = ConcatDataset(train_datasets)
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     return val_loader, train_loader
+
+
+def load_data_LOCO(dataset_path, target_cell_line, all_cell_lines, batch_size):
+    """
+    Leave-one-cell-line-out data loading.
+    Train: all available folds from every cell line except target.
+    Val: all available folds from the target cell line.
+    Auto-detects folds — works for NP1 (F1-F5) and full-eval (F1 only).
+    """
+    source_cell_lines = [cl for cl in all_cell_lines if cl != target_cell_line]
+
+    train_datasets = []
+    for cl in source_cell_lines:
+        for fold_idx in range(1, 10):
+            fold_path = os.path.join(dataset_path, f"{cl}_F{fold_idx}.pt")
+            if not os.path.exists(fold_path):
+                break
+            train_datasets.append(torch.load(fold_path, weights_only=False))
+
+    val_datasets = []
+    for fold_idx in range(1, 10):
+        fold_path = os.path.join(dataset_path, f"{target_cell_line}_F{fold_idx}.pt")
+        if not os.path.exists(fold_path):
+            break
+        val_datasets.append(torch.load(fold_path, weights_only=False))
+
+    assert train_datasets, f"No training data found in {dataset_path} for LOCO (sources: {source_cell_lines})"
+    assert val_datasets, f"No val data found in {dataset_path} for target {target_cell_line}"
+
+    train_dataset = ConcatDataset(train_datasets)
+    val_dataset = ConcatDataset(val_datasets) if len(val_datasets) > 1 else val_datasets[0]
+
+    return (
+        DataLoader(val_dataset, batch_size=batch_size, shuffle=False),
+        DataLoader(train_dataset, batch_size=batch_size, shuffle=True),
+    )
 
 
 # for case study

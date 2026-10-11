@@ -1,1 +1,27 @@
-/src/__pycache__/
+# ── Python ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# ── Virtual environments ────────────────────────────────
+.venv/
+venv/
+env/
+
+# ── Large / regenerable data ────────────────────────────
+data/datasets/
+data/KG_neighbors/
+
+# ── Training outputs, logs, caches ──────────────────────
+save/
+results/
+wandb/
+*.pt
+*.pth
+*.log
+
+# ── OS / editors ────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/

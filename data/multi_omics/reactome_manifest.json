@@ -1,0 +1,7 @@
+{
+  "P": 1052,
+  "n_sym": 10477,
+  "n_features": 24,
+  "min_ccle_overlap": 15,
+  "biobert": "microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext"
+}
