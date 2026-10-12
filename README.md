@@ -44,8 +44,11 @@ PromptCASL/
 │   └── multi_omics/            Reactome pathway-evidence artifacts
 ├── scripts/
 │   ├── build_reactome_pair_evidence.py  precompute the pathway-evidence artifacts
+│   ├── build_kg_neighbors.py            build the PrimeKG neighbor tables
+│   ├── train_conve_primekg.py           train ConvE on PrimeKG for the gene-prior embeddings
 │   ├── eval_ablation_subsets.py         per-cell-line / per-subset ablation evaluation
-│   └── eval_direction_consistency.py    within-pair direction consistency
+│   ├── eval_direction_consistency.py    within-pair direction consistency
+│   └── kgslomics/                       KG-SLomics baseline re-implementation
 ├── ana/                        interpretability helpers and notebooks
 └── env.yaml
 ```
@@ -61,22 +64,33 @@ conda activate promptcasl
 
 ## External data
 
-Third-party resources are not redistributed. Their locations are read from environment variables (see `src/config.py`), defaulting to a `data/external/` directory:
+Third-party resources are not redistributed. Their locations are read from environment variables; `src/config.py` lists every variable and its default path under `data/external/`.
 
-| Variable | Default | Content |
-|---|---|---|
-| `PROMPTCASL_CCLE_DIR` | `data/external/CCLE` | `GE.csv`, `CNGene.csv`, `MU.csv`, `name2ens.json` (CCLE) |
-| `PROMPTCASL_SLKB_RAW` | `data/external/rawSL.csv` | SLKB label table |
-| `PROMPTCASL_GENEPT_PKL` | `data/external/GenePT_gene_protein_embedding_model_3_text.pickle` | GenePT gene embeddings |
-| `PROMPTCASL_PRIMEKG_EMB` | `data/external/conv_primekg_entity_embeddings.npy` | PrimeKG entity embeddings (ConvE) |
-| `PROMPTCASL_NCBI_SUMMARY` | `data/external/NCBI_clipped_summary_of_genes.json` | NCBI gene summaries (v3 prompt) |
-| `PROMPTCASL_GMT_C2CP` | `data/external/c2.cp.v7.5.1.symbols.gmt` | Reactome gene sets (MSigDB C2:CP) |
-| `PROMPTCASL_BIOMEDBERT` | `microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext` | BiomedBERT encoder |
-| `PROMPTCASL_KG_NEIGHBORS` | `data/KG_neighbors` | per-cell-line PrimeKG neighbor tables |
+| Resource | Variable |
+|---|---|
+| CCLE expression / copy-number / mutation | `PROMPTCASL_CCLE_DIR` |
+| SLKB labels | `PROMPTCASL_SLKB_RAW` |
+| GenePT embeddings | `PROMPTCASL_GENEPT_PKL` |
+| PrimeKG embeddings / dictionary / triples | `PROMPTCASL_PRIMEKG_EMB`, `PROMPTCASL_PRIMEKG_EMB128`, `PROMPTCASL_PRIMEKG_ENTITY_JSON`, `PROMPTCASL_PRIMEKG_TRIPLES_TSV` |
+| PrimeKG neighbor tables | `PROMPTCASL_KG_NEIGHBORS` |
+| NCBI gene summaries (v3 prompt) | `PROMPTCASL_NCBI_SUMMARY` |
+| Reactome gene sets (MSigDB C2:CP) | `PROMPTCASL_GMT_C2CP` |
+| BiomedBERT encoder | `PROMPTCASL_BIOMEDBERT` |
+| SLBench 9845-gene universe | `PROMPTCASL_SLBENCH_META` |
+| Sanger ProCan proteomics | `PROMPTCASL_SANGER_PROCAN` |
 
 ## Pipeline
 
 Run all commands from the repository root.
+
+**0. PrimeKG resources (optional)**
+
+The gene-prior embeddings and neighbor tables are precomputed once:
+
+```bash
+python -m scripts.train_conve_primekg --dim 768 --epochs 10 --device 0   # conv_primekg_entity_embeddings.npy
+python -m scripts.build_kg_neighbors                                    # data/KG_neighbors/*.tsv
+```
 
 **1. Prompt templates**
 
@@ -120,6 +134,14 @@ python -m src.main_loco --loco_mode full --target_cell_line A549 --omics_mode pa
 Training writes checkpoints, logs and metrics under `save/`. Use `python -m src.main --help` and `python -m src.main_loco --help` for the full list of options (learning rates, ablation flags, LoRA, etc.).
 
 ## Analysis
+
+Baseline:
+
+```bash
+python scripts/kgslomics/build_kg.py
+python scripts/kgslomics/build_features.py --protein procan
+python scripts/kgslomics/run.py --scenario mcl --split gplo --fold 0
+```
 
 Scripts (run after training):
 

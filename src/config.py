@@ -27,6 +27,30 @@ PRIMEKG_EMB = os.environ.get(
     "PROMPTCASL_PRIMEKG_EMB",
     os.path.join(EXTERNAL_DIR, "conv_primekg_entity_embeddings.npy"),
 )
+# PrimeKG 128-dim ConvE embeddings (used by the KG-SLomics baseline)
+PRIMEKG_EMB128 = os.environ.get(
+    "PROMPTCASL_PRIMEKG_EMB128",
+    os.path.join(EXTERNAL_DIR, "conv_primekg_entity_emb128.npy"),
+)
+# PrimeKG name -> entity-id dictionary and the name-level triples table
+PRIMEKG_ENTITY_JSON = os.environ.get(
+    "PROMPTCASL_PRIMEKG_ENTITY_JSON",
+    os.path.join(EXTERNAL_DIR, "primekg_entity_to_id.json"),
+)
+PRIMEKG_TRIPLES_TSV = os.environ.get(
+    "PROMPTCASL_PRIMEKG_TRIPLES_TSV",
+    os.path.join(EXTERNAL_DIR, "primeKG_triples_names.tsv"),
+)
+# SLBench 9845-gene universe (used to align the baselines' evaluation pairs)
+SLBENCH_META = os.environ.get(
+    "PROMPTCASL_SLBENCH_META",
+    os.path.join(EXTERNAL_DIR, "meta_table_9845.csv"),
+)
+# Sanger ProCan proteomics (4th omics channel of the KG-SLomics baseline)
+SANGER_PROCAN = os.environ.get(
+    "PROMPTCASL_SANGER_PROCAN",
+    os.path.join(EXTERNAL_DIR, "proteomics.csv"),
+)
 # NCBI gene summary text (used by the v3 prompt)
 NCBI_SUMMARY = os.environ.get(
     "PROMPTCASL_NCBI_SUMMARY",

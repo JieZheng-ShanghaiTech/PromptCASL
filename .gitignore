@@ -12,6 +12,8 @@ env/
 # ── Large / regenerable data ────────────────────────────
 data/datasets/
 data/KG_neighbors/
+data/external/
+scripts/kgslomics/cache/
 
 # ── Training outputs, logs, caches ──────────────────────
 save/
