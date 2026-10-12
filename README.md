@@ -1,6 +1,8 @@
 # PromptCASL
 
-Context-aware prediction of cell line-specific synthetic lethality (SL) with biomedical language models and multimodal context modeling.
+**Context-Aware Synthetic Lethality Prediction with Biomedical Language Models and Multimodal Context Modeling**
+
+PromptCASL is a context-aware framework for cell line-specific synthetic lethality (SL) prediction.
 
 ![PromptCASL overview](./PromptCASL_pipeline.png)
 
@@ -155,6 +157,12 @@ The notebooks and analysis helpers in `ana/` read cached attention, prediction a
 ## Data availability
 
 CCLE, SLKB, Reactome (MSigDB C2:CP), GenePT and PrimeKG are available from their original public sources. Processed SL labels, prompt templates, Reactome pathway-evidence artifacts and the cross-validation splits used in this study are provided in this repository.
+
+## Citation
+
+**Conference version.** Ting Lu, Yimiao Feng, Ruoyin Zhang, Yingfan Rui, Jie Zheng. *Prompt-Driven Context-Aware Prediction of Cell Line-Specific Synthetic Lethality via Biomedical Large Language Models.* 2025 IEEE International Conference on Bioinformatics and Biomedicine (BIBM), pp. 318-324. DOI: [10.1109/BIBM66473.2025.11356200](https://doi.org/10.1109/BIBM66473.2025.11356200)
+
+**Journal version.** Ting Lu, Yimiao Feng, Ruoyin Zhang, Yingfan Rui, Jie Zheng. *Context-Aware Synthetic Lethality Prediction with Biomedical Language Models and Multimodal Context Modeling.*
 
 ## License
 
