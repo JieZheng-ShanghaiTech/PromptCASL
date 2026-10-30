@@ -165,8 +165,8 @@ class LLMEncoder(nn.Module):
             extended_attention_mask = extended_attention_mask.to(dtype=inputs.dtype)  # float
             extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0  # 1->0, 0->-10000
             
-            # Get encoder outputs
-            encoder_outputs = self.model.encoder(inputs, attention_mask=extended_attention_mask, output_attentions=True)  # Shape: [batch_size, seq_len, hidden_size]
+            # Get encoder outputs (attention maps are not used)
+            encoder_outputs = self.model.encoder(inputs, attention_mask=extended_attention_mask, output_attentions=False)
             
             # print(type(encoder_outputs))
             # print(encoder_outputs.keys()) # ['last_hidden_state', 'attentions']
@@ -174,7 +174,6 @@ class LLMEncoder(nn.Module):
             # print(encoder_outputs.attentions[0].shape) # torch.Size([24, 12, 512, 512])
 
             encoder_output = encoder_outputs[0]
-            attention_scores = encoder_outputs[-1]
             # Extract CLS token (first token) output
             cls_token_output = encoder_output[:, 0, :]  # Shape: [batch_size, hidden_size]
             # return cls_token_output, attention_scores

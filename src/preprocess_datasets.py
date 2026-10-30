@@ -8,6 +8,8 @@ import torch
 from transformers import AutoModel, AutoTokenizer
 import os
 from src.data_loader import GenePairDataset
+from src.config import (GENEPT_PKL, PRIMEKG_EMB, KG_NEIGHBOR_DIR, TEXT_TEMPLATE_DIR,
+                        FOLDS_DIR, DATASET_DIR, BIOMEDBERT, OMICS_JSON, CELL_LINES)
 import random
 from collections import defaultdict
 
@@ -32,8 +34,8 @@ cell_lines_info = {
     },
     "PK1": {
         "cell_line_id": "ACH-000307",
-        "description": "PK1 cell line is derived from porcine kidney tissue, used in research of viral infections and nephrotoxicity. It is responsible for the diffusion of substances across cellular membranes, vital for understanding pathogenic interactions. These cells exhibit high levels of enzymatic activity, important for studying kidney function and drug-induced renal damage.",
-        "description_w_genes": "PK1 cell line is derived from porcine kidney tissue, used in research of viral infections and nephrotoxicity. It is responsible for the diffusion of substances across cellular membranes, vital for understanding pathogenic interactions. These cells exhibit high levels of enzymatic activity, important for studying kidney function and drug-induced renal damage. Commonly overexpressed marker genes include: DIPK2B,C8orf74,PSG8,GPR78,LMOD3,OR10V1,PADI3,AC007906.2,KRT13,DNAH2,LY6D,NIPAL4,DRD1,UPK3B,GJB4,SPRR1B,PLA2G4F,DHRS9,PHACTR3,SERPINF2."
+        "description": "PK1 (PK-1) cell line is derived from human pancreatic ductal adenocarcinoma, used in research of pancreatic cancer and KRAS-driven oncogenic signaling. It is responsible for modeling tumor proliferation, invasion, and therapeutic resistance in pancreatic epithelial cells. These cells are characterized by activating KRAS (G12D) and TP53 mutations, making them a valuable model for studying pancreatic cancer progression and targeted therapies.",
+        "description_w_genes": "PK1 (PK-1) cell line is derived from human pancreatic ductal adenocarcinoma, used in research of pancreatic cancer and KRAS-driven oncogenic signaling. It is responsible for modeling tumor proliferation, invasion, and therapeutic resistance in pancreatic epithelial cells. These cells are characterized by activating KRAS (G12D) and TP53 mutations, making them a valuable model for studying pancreatic cancer progression and targeted therapies. Commonly overexpressed marker genes include: DIPK2B,C8orf74,PSG8,GPR78,LMOD3,OR10V1,PADI3,AC007906.2,KRT13,DNAH2,LY6D,NIPAL4,DRD1,UPK3B,GJB4,SPRR1B,PLA2G4F,DHRS9,PHACTR3,SERPINF2."
     },
     "IPC298": {
         "cell_line_id": "ACH-000915",
@@ -62,7 +64,7 @@ cell_lines_info = {
     },
 }
 
-with open("../data/multi_omics/cell_line_omics_data.json", "r") as f:
+with open(OMICS_JSON, "r") as f:
     cell_line_omics = json.load(f)
 
 
@@ -134,7 +136,7 @@ def get_biobert_token_emb_for_pair(cell_line, geneA, geneB, cell_lines_info, gen
 
 ## step2: GenePT emb of geneA and geneB
 ### load GenePT embeddings
-with open("../data/GenePT/GenePT_gene_protein_embedding_model_3_text.pickle.", 'rb') as file:
+with open(GENEPT_PKL, 'rb') as file:
     genept_gene_embeddings = pickle.load(file) # 3072, text-embedding-3-large embeddings
 for gene, emb in genept_gene_embeddings.items():
     genept_gene_embeddings[gene] = np.array(emb, dtype=np.float32)
@@ -142,10 +144,10 @@ for gene, emb in genept_gene_embeddings.items():
 ## step3: KG embeddings for geneA neighbor list, geneB neighbor list, and shared neighbor list
 #### PrimeKG Emb
 kg_dataset = PrimeKG(create_inverse_triples=True)
-kg_entity_embeddings = np.load('../data/KG_ConvE/conv_primekg_entity_embeddings.npy')
+kg_entity_embeddings = np.load(PRIMEKG_EMB)
 kg_entity_to_id = kg_dataset.training.entity_to_id
 
-def get_kg_neighbor_emb_for_pair(geneA, geneB, cell_line, entity_to_id, kg_entity_embeddings, neighbor_dir="../data/KG_neighbors", min_len=100, rd_seed=42):
+def get_kg_neighbor_emb_for_pair(geneA, geneB, cell_line, entity_to_id, kg_entity_embeddings, neighbor_dir=KG_NEIGHBOR_DIR, min_len=100, rd_seed=42):
     """
     For a given geneA, geneB, and cell_line, extract the neighbor lists from the cell line's neighbor .tsv file,
     and return the KG embeddings for each neighbor list.
@@ -247,7 +249,7 @@ def build_folds_GenePairDataset(
     biobert, 
     tokenizer, 
     device, 
-    neighbor_dir="../data/KG_neighbors",
+    neighbor_dir=KG_NEIGHBOR_DIR,
     min_kg_neighbors=100
 ):
     """
@@ -315,9 +317,6 @@ def build_folds_GenePairDataset(
                 geneB_kg_emb,
                 geneA_neighbors_emb,
                 geneB_neighbors_emb,
-                omics_ge,       
-                omics_cnv,      
-                omics_mu        
             )
             embeddings.append(embedding)
             label_tensor = torch.tensor(label).long()
@@ -342,47 +341,55 @@ def build_folds_GenePairDataset(
         print(f"saved in {fold_pt_path}")
     return 
 
-# Example usage:
-### BioBERT
-# model_name = "../data/biobert-base-cased-v1.2"
-model_name = "../data/BiomedBERT"
-# model_name = "../data/Qwen3-Embedding-0.6B"
-with torch.cuda.device(device):
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    biobert = AutoModel.from_pretrained(model_name).to(device)
+def build_all_folds(cells=None):
+    # Example usage:
+    ### BioBERT
+    # model_name = "<path to a BioBERT checkpoint>"
+    model_name = BIOMEDBERT
+    # model_name = "<path to a Qwen embedding model>"
+    with torch.cuda.device(device):
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        biobert = AutoModel.from_pretrained(model_name).to(device)
     
-# fold_output_dir = "../data/datasets/cell_line_qwen06_kg50shared"
-fold_output_dir = "../data/datasets/cell_line_w_omics_biomedbert_kg50shared"
-os.makedirs(fold_output_dir, exist_ok=True)
-cell_line_names = ["22RV1", "PK1", "IPC298", "MEWO",  "A549", "GI1", "HS936T"]
 
-for cell_line_case in cell_line_names:
-    print("Processing ", cell_line_case)
-    with open(f"../data/text_template/{cell_line_case}_gene_omics_descriptions.json", "r") as f:
-        gene_omics_desc = json.load(f)
-    build_folds_GenePairDataset(
-        f"../data/folds_assignment/{cell_line_case}_filtered_NP1_F.csv",
-        cell_line_case,
-        cell_lines_info,
-        gene_omics_desc,
-        genept_gene_embeddings,
-        kg_entity_to_id,
-        kg_entity_embeddings,
-        fold_output_dir,
-        biobert,
-        tokenizer,
-        device
-    )
+    fold_output_dir = DATASET_DIR
+    os.makedirs(fold_output_dir, exist_ok=True)
+    cell_line_names = cells or CELL_LINES
 
-# Example for CDC6, MAP2K1:
-#   token_emb: torch.Size([512, 768])
-#   attention_mask: torch.Size([512])
-#   geneA_genept: (3072,)
-#   geneA_kg_emb: (768,)
-#   geneB_genept: (3072,)
-#   geneB_kg_emb: (768,)
-#   geneA_neighbors_emb: (100, 768)
-#   geneB_neighbors_emb: (100, 768)
+    for cell_line_case in cell_line_names:
+        print("Processing ", cell_line_case)
+        with open(os.path.join(TEXT_TEMPLATE_DIR, f"{cell_line_case}_gene_omics_descriptions.json"), "r") as f:
+            gene_omics_desc = json.load(f)
+        build_folds_GenePairDataset(
+            os.path.join(FOLDS_DIR, f"{cell_line_case}_filtered_NP1_F.csv"),
+            cell_line_case,
+            cell_lines_info,
+            gene_omics_desc,
+            genept_gene_embeddings,
+            kg_entity_to_id,
+            kg_entity_embeddings,
+            fold_output_dir,
+            biobert,
+            tokenizer,
+            device
+        )
+
+    #   token_emb: torch.Size([512, 768])
+    #   attention_mask: torch.Size([512])
+    #   geneA_genept: (3072,)
+    #   geneA_kg_emb: (768,)
+    #   geneB_genept: (3072,)
+    #   geneB_kg_emb: (768,)
+    #   geneA_neighbors_emb: (100, 768)
+    #   geneB_neighbors_emb: (100, 768)
 
 
-## python -m src.preprocess_datasets
+    ## python -m src.preprocess_datasets
+
+
+if __name__ == "__main__":
+    import argparse
+    ap = argparse.ArgumentParser(description="Build the per-fold .pt datasets.")
+    ap.add_argument("--cells", nargs="+", default=None,
+                    help="Cell lines to build (default: all in src/config.py::CELL_LINES).")
+    build_all_folds(ap.parse_args().cells)

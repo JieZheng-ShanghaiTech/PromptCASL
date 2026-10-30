@@ -1,27 +1,20 @@
 import torch
-import yaml
-import pickle
 import pandas as pd
 import logging
-import numpy as np
 import argparse
+from transformers import AutoModel
 from src.train_model import train_model
 from datetime import datetime
-from transformers import AutoModel, AutoTokenizer
 from .data_loader import load_data_SCL, load_data_MCL, load_data_MCTL
-from .eval import evaluate_on_folds
+from .eval import evaluate_on_folds_v1, evaluate_model
 import os
 os.environ["WANDB_MODE"] = "offline"
 import wandb
 import warnings
 warnings.filterwarnings("ignore")
 
-
-def load_config(file_path):
-    """Load configuration from a YAML file."""
-    with open(file_path, 'r') as file:
-        config = yaml.safe_load(file)
-    return config
+from .config import (BIOMEDBERT, DATASET_DIR, SAVE_DIR, RESULT_DIR, CELL_LINES,
+                     PRIMEKG_EMB, KG_NEIGHBOR_DIR)
 
 
 def setup_logger(name, log_file_path, level=logging.INFO):
@@ -40,12 +33,13 @@ def parse_arguments():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Training configuration for PromptCASL.")
     # Dataset and model paths
-    parser.add_argument("--dataset_path", type=str, default="../data/datasets/cell_line_biomedbert_kg50shared", help="Path to the dataset file.")
-    parser.add_argument("--biobert_path", type=str, default="../data/biobert-base-cased-v1.2", help="Path to the pretrained BioBERT model.")
-    parser.add_argument("--save_folder", type=str, default="../save", help="Path to the save train results.")
-    parser.add_argument("--cell_line", type=str, choices=["mixed", "mctl","PK1", "IPC298", "MEWO", "A549", "22RV1", "GI1", "HS936T"], default="mixed", help="Specify the cell line to train on (or 'all' to use all datasets combined).")
-    parser.add_argument("--scenario", type=str, choices=["SCL", "MCL", "MCTL"], default="SCL", help="Specify the scenario to train on. MCL: Multi Cell line Learning, SCL: Single Cell line Learning, MCTL: Multi Cell line Transfer Learning")
-    parser.add_argument("--cell_line_set", nargs="+", default=["A549", "PK1", "IPC298", "MEWO"], help="Source cell lines for MCL/MCTL scenarios.")
+    parser.add_argument("--dataset_path", type=str, default=DATASET_DIR, help="Directory with the per-fold .pt files produced by src/preprocess_datasets.py.")
+    parser.add_argument("--biobert_path", type=str, default=BIOMEDBERT, help="Path to the pretrained BiomedBERT checkpoint.")
+    parser.add_argument("--save_folder", type=str, default=SAVE_DIR, help="Where training runs are written.")
+    parser.add_argument("--result_root", type=str, default=RESULT_DIR, help="Where the per-cell evaluation CSVs are written.")
+    parser.add_argument("--cell_line", type=str, choices=["mixed", "mctl"] + CELL_LINES, default="mixed", help="MCL: mixed (A549/PK1/IPC298/MEWO); MCTL: mctl; SCL: a single cell line.")
+    parser.add_argument("--scenario", type=str, choices=["SCL", "MCL", "MCTL"], default=None, help="Optional override of the scenario inferred from --cell_line.")
+    parser.add_argument("--cell_line_set", nargs="+", default=["A549", "PK1", "IPC298", "MEWO"], help="Source cell lines for MCL/MCTL.")
     parser.add_argument("--target_cell_lines", nargs="+", default=["22RV1", "GI1", "HS936T"], help="Target (Test)) cell lines for MCTL scenarios.")
     parser.add_argument("--negpos", type=int, default=1, help="Negative to positive sample ratio (e.g., 1, 5, 10).")
     # Hyperparameters for model and optimizer
@@ -120,19 +114,16 @@ def summarize_cv_results(final_results_path):
 def infer_scenario_from_cell_line(cell_line):
     if cell_line == "mixed":
         return "MCL"
-    elif cell_line in {"mctl", "22RV1", "GI1", "HS936T"}:
-    # elif cell_line == "mctl":
+    if cell_line in {"mctl", "22RV1", "GI1", "HS936T"}:
         return "MCTL"
-    elif cell_line in {"A549", "PK1", "IPC298", "MEWO"}:
-        return "SCL"
-    else:
-        raise ValueError(f"Unknown cell line: {cell_line}")
+    return "SCL"
 
 
 def main():
     args = parse_arguments()
-    args.scenario = infer_scenario_from_cell_line(args.cell_line)
-    
+    if args.scenario is None:
+        args.scenario = infer_scenario_from_cell_line(args.cell_line)
+
     # Create save folder
     save_folder, current_time = create_save_folder(args.device, args.save_folder, args.scenario, args.cell_line)
     print(f"Results will be saved in: {save_folder}")
@@ -192,25 +183,15 @@ def main():
     logger.info("Training completed successfully.")
     
     
-    ### eval 
+    ### evaluation
+    model_id = [os.path.basename(save_folder)]
     if args.scenario == "MCL":
-        eval_cell_lines = args.cell_line_set
-        model_cell_line = "mixed"
+        evaluate_on_folds_v1(args.cell_line_set, args.cell_line, "MCL", model_id,
+                             os.path.join(args.save_folder, "MCL"), args.result_root, device, biobert)
     elif args.scenario == "MCTL":
-        eval_cell_lines = args.target_cell_lines
-        model_cell_line = "mctl"
-    base_model_dir = f"../save/{args.scenario}"
-    result_root = "../results"
-    model_ids=[os.path.basename(save_folder)]
-    evaluate_on_folds(eval_cell_lines, model_cell_line, args.scenario, model_ids, base_model_dir, result_root, device, biobert)
-
-
-
+        evaluate_model(args.target_cell_lines, "mctl", "MCTL", model_id,
+                       os.path.join(args.save_folder, "MCTL"), args.result_root, device, biobert)
 
 
 if __name__ == "__main__":
     main()
-
-
-
-

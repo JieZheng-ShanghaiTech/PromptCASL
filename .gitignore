@@ -1,1 +1,12 @@
-/src/__pycache__/
+__pycache__/
+*.pyc
+save/
+results/
+logs/
+wandb/
+
+# local artefacts (build with src/preprocess_datasets.py)
+data/datasets/
+data/KG_neighbors/
+data/external/
+data/BiomedBERT/

@@ -153,7 +153,6 @@ def load_data_MCTL(dataset_path, target_cell_lines, cell_line_set, negpos, batch
 
 # for case study
 def load_train_test_datasets_infer(cell_line_condition, folder=None, shuffle=True, logger=None):
-    train_path, train_emb, train_labels = None, None, None
     test_path = f"{folder}/{cell_line_condition}_test.pt"
     # Load test dataset
     test_dataset = torch.load(test_path, weights_only=True)
@@ -168,7 +167,6 @@ def load_train_test_datasets_infer(cell_line_condition, folder=None, shuffle=Tru
     test_emb, test_labels = zip(*test_data)
 
     if logger:
-        logger.info(f"Loaded {train_path} and {test_path}")
+        logger.info(f"Loaded {test_path}")
 
     return train_emb, train_labels, test_emb, test_labels
-

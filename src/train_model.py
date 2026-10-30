@@ -20,7 +20,10 @@ def log_print(string, logger):
     print(string)
     logger.info(string)
 
-def load_omics_emb_dict(pkl_path="../data/multi_omics/multi_omics_emb_3_256.pkl"):
+def load_omics_emb_dict(pkl_path=None):
+    if pkl_path is None:
+        from src.config import PROJECT_ROOT
+        pkl_path = os.path.join(PROJECT_ROOT, "data", "multi_omics", "multi_omics_emb_3_256.pkl")
     with open(pkl_path, "rb") as f:
         records_list = pickle.load(f)
     # Convert list to dict keyed by cell_line_name
@@ -35,7 +38,10 @@ def get_omics_emb_for_cell_line(records, cell_line_name):
     omics_emb = np.concatenate([rec["ge_emb"], rec["cnv_emb"], rec["mu_emb"]], axis=0)  # shape (768,)
     return omics_emb
 
-def load_omics_dict(path="../data/multi_omics/cell_line_omics_data.json"):
+def load_omics_dict(path=None):
+    if path is None:
+        from src.config import OMICS_JSON
+        path = OMICS_JSON
     with open(path, "r") as f:
         omics_emb_dict = json.load(f)
     return omics_emb_dict
@@ -402,7 +408,7 @@ def validate_model(data_loader, llm_encoder, gene_agg, predictor, device, omics_
         }
 
 
-def eval_model(data_loader, llm_encoder, gene_agg, predictor, device, omics_emb_dict=None, omics_dict=None, ge_encoder=None, cnv_encoder=None, mu_encoder=None, fold=None):
+def eval_model(data_loader, llm_encoder, gene_agg, predictor, device, omics_emb_dict=None, omics_dict=None, ge_encoder=None, cnv_encoder=None, mu_encoder=None, fold=None, save_pred_path=None):
     llm_encoder.eval()
     gene_agg.eval()
     predictor.eval()
@@ -475,25 +481,8 @@ def eval_model(data_loader, llm_encoder, gene_agg, predictor, device, omics_emb_
             #     token_emb[:, idx, :] = pad_emb 
             ###########################################################################
 
-            # Step 1: LLM Encoding
-            sentence_emb, att_scores = llm_encoder(token_emb, attention_mask) ############ attention aggregation
-            # sentence_emb = llm_encoder(token_emb, attention_mask)
-            
-            ########## attention aggregation ####################
-            # print(len(att_scores)) # 12 layers # att_scores[0]: torch.Size([24, 12, 512, 512])
-            # Average over heads: [batch, heads, 512, 512] → [batch, 512, 512]
-            att_scores_avg_heads = [layer.mean(dim=1) for layer in att_scores]
-            # Stack to [12, batch, 512, 512]
-            att_stack = torch.stack(att_scores_avg_heads)  # [12, B, 512, 512]
-            # Average over batch (dim=1): → [12, 512, 512]
-            att_avg_batch = att_stack.mean(dim=1)
-            # Accumulate
-            if att_sum is None:
-                att_sum = att_avg_batch
-            else:
-                att_sum += att_avg_batch
-            batch_count += 1
-            ######################################################
+            # Step 1: LLM encoding (CLS vector)
+            sentence_emb = llm_encoder(token_emb, attention_mask)
             
             # Step 2: Gene Attention Aggregation
             expressed_geneA, geneA_agg_emb = gene_agg(geneA_genept, geneA_neighbors_emb, geneB_neighbors_emb, geneA_kg_emb, geneB_kg_emb)
@@ -570,6 +559,9 @@ def eval_model(data_loader, llm_encoder, gene_agg, predictor, device, omics_emb_
             #############################################################
         
         ####### save prediction and emb for pairs #####################
+        if save_pred_path:
+            os.makedirs(os.path.dirname(save_pred_path), exist_ok=True)
+            pd.DataFrame(prediction_records).to_csv(save_pred_path, index=False)
         # case_name = "mctl_complete"
         # output_dir = f"../results/case_study/materials/{case_name}"
         # os.makedirs(output_dir, exist_ok=True)

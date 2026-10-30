@@ -8,37 +8,24 @@ import torch
 import os
 import pickle
 
+from src.config import CCLE_DIR, SLKB_RAW, TEXT_TEMPLATE_DIR
+
 """
     prepare the text template of (cell line description, geneA with Omics, geneB with Omics)
     output file: 
     {save_path}/{cell_line}_gene_omics_text_template.json
 """
-device = torch.device("cuda:0")
-print(device)
 
 ### load SL pairs data
-labels_df = pd.read_csv('../data/SLKB/rawSL.csv')
-# Define cell line DataFrames
-cell_line_dfs = {
-    "PK1": labels_df[labels_df['cell_line_origin'] == 'PK1'].copy(),
-    "IPC298": labels_df[labels_df['cell_line_origin'] == 'IPC298'].copy(),
-    "MEWO": labels_df[labels_df['cell_line_origin'] == 'MEWO'].copy(),
-    "A549": labels_df[labels_df['cell_line_origin'] == 'A549'].copy(),
-    "22RV1": labels_df[labels_df['cell_line_origin'] == '22RV1'].copy(),
-    "GI1": labels_df[labels_df['cell_line_origin'] == 'GI1'].copy(),
-    "HS936T": labels_df[labels_df['cell_line_origin'] == 'HS936T'].copy(),
-}
-
-### prepare omics data
 # Function to load omics data
 def load_omics_data():
     # Load required omics data
-    with open('../data/CCLE/name2ens.json', 'r') as file:
+    with open(os.path.join(CCLE_DIR, 'name2ens.json'), 'r') as file:
         name_id_mapping = json.load(file)
 
-    ge_data = pd.read_csv('../data/CCLE/GE.csv')
-    mu_data = pd.read_csv('../data/CCLE/MU.csv', low_memory=False)
-    cn_gene_data = pd.read_csv('../data/CCLE/CNGene.csv')
+    ge_data = pd.read_csv(os.path.join(CCLE_DIR, 'GE.csv'))
+    mu_data = pd.read_csv(os.path.join(CCLE_DIR, 'MU.csv'), low_memory=False)
+    cn_gene_data = pd.read_csv(os.path.join(CCLE_DIR, 'CNGene.csv'))
 
     # Set index for GE and CNV data
     ge_data.set_index('Unnamed: 0', inplace=True)
@@ -46,8 +33,6 @@ def load_omics_data():
 
     return name_id_mapping, ge_data, mu_data, cn_gene_data
 
-# Load labels and omics data
-name_id_mapping, ge_data, mu_data, cn_gene_data = load_omics_data()
 
 
 ### function for omics data and template
@@ -165,18 +150,33 @@ def process_cell_line_data(cell_line, cell_lines_info, cell_line_id, target_df, 
 
 
 
-# Directory to save outputs
-save_path = "../data/text_template"
-os.makedirs(save_path, exist_ok=True)
+def main():
+    device = torch.device("cuda:0")
+    print(device)
 
-# Process each cell line
-for cell_line_case_name, target_df in cell_line_dfs.items():
-    cell_line_name = cell_line_case_name.split("_")[0]
-    cell_line_id = cell_lines_info[cell_line_name]["cell_line_id"]
-    process_cell_line_data(cell_line_name, cell_lines_info, cell_line_id, target_df, name_id_mapping, ge_data, mu_data, cn_gene_data, save_path)
+    labels_df = pd.read_csv(SLKB_RAW)
+    cell_line_dfs = {
+        cl: labels_df[labels_df["cell_line_origin"] == cl].copy()
+        for cl in ["PK1", "IPC298", "MEWO", "A549", "22RV1", "GI1", "HS936T"]
+    }
+    name_id_mapping, ge_data, mu_data, cn_gene_data = load_omics_data()
+
+    # Directory to save outputs
+    save_path = TEXT_TEMPLATE_DIR
+    os.makedirs(save_path, exist_ok=True)
+
+    # Process each cell line
+    for cell_line_case_name, target_df in cell_line_dfs.items():
+        cell_line_name = cell_line_case_name.split("_")[0]
+        cell_line_id = cell_lines_info[cell_line_name]["cell_line_id"]
+        process_cell_line_data(cell_line_name, cell_lines_info, cell_line_id, target_df, name_id_mapping, ge_data, mu_data, cn_gene_data, save_path)
 
 
-# python -m src.data_prepare
+    # python -m src.data_prepare
 
 
 
+
+
+if __name__ == "__main__":
+    main()

@@ -86,6 +86,66 @@ def load_models_from_log(model_dir, bioLLM, scenario, fold_idx, device, single_m
          return llm_encoder, gene_agg, predictor, None, None, None, args
 
 
+def evaluate_on_folds_v1(cell_lines: list, model_cell_line: str, scenario, model_ids: list,
+                         base_model_dir: str, result_root: str, device, bioLLM):
+    """Evaluate the five fold checkpoints cell line by cell line.
+
+    For fold k, `model_{scenario}_F{k}.pt` is scored on that cell line's fold-k validation
+    split (`load_data_SCL(..., fold_idx=k-1)`), giving one value per (cell line, fold); the
+    output CSV carries the five folds together with their mean and standard deviation.
+    """
+    import re
+    for model_id in model_ids:
+        model_dir = os.path.join(base_model_dir, model_cell_line, model_id)
+        if not os.path.isdir(model_dir):
+            raise FileNotFoundError(f"checkpoint dir not found: {model_dir}")
+        result_dir = os.path.join(result_root, scenario)
+        os.makedirs(result_dir, exist_ok=True)
+        result_path = os.path.join(result_dir, f"{model_id}.csv")
+        print(f"eval for model: {scenario} {model_id}")
+        all_blocks = []
+        for cell_line in cell_lines:
+            print(f"\nEvaluating for {cell_line}\n{'=' * 50}")
+            results = []
+            for model_file in sorted(os.listdir(model_dir)):
+                m = re.fullmatch(rf"model_{scenario}_F(\d+)\.pt", model_file)
+                if not m:
+                    continue
+                fold_idx = int(m.group(1))
+                (llm_encoder, gene_agg, predictor,
+                 ge_encoder, cnv_encoder, mu_encoder, args) = load_models_from_log(
+                    model_dir, bioLLM, scenario, fold_idx, device, single_model=False)
+                eval_loader, _ = load_data_SCL(args.dataset_path, cell_line,
+                                               batch_size=args.batch_size, negpos=1,
+                                               fold_idx=fold_idx - 1)
+                omics_emb_dict = load_omics_emb_dict() if getattr(args, "omics_data", 0) else None
+                omics_dict = load_omics_dict() if getattr(args, "omics_encoder", 0) else None
+                vm = eval_model(eval_loader, llm_encoder, gene_agg, predictor, device,
+                                omics_emb_dict=omics_emb_dict, omics_dict=omics_dict,
+                                ge_encoder=ge_encoder, cnv_encoder=cnv_encoder, mu_encoder=mu_encoder,
+                                fold=fold_idx)
+                results.append({"Cell Line": cell_line, "Fold": fold_idx,
+                                "Val Loss": vm["loss"], "Acc": vm["accuracy"],
+                                "AUC": vm["roc_auc"], "AUPR": vm["aupr"], "F1": vm["f1"],
+                                "BACC": vm["bacc"], "Recall": vm["recall"]})
+            df = pd.DataFrame(results)
+            if not df.empty:
+                mean_row = df.drop(columns=["Cell Line", "Fold"]).mean()
+                std_row = df.drop(columns=["Cell Line", "Fold"]).std()  # sample standard deviation
+                mean_row["Cell Line"], mean_row["Fold"] = cell_line, "mean"
+                std_row["Cell Line"], std_row["Fold"] = cell_line, "std"
+                df = pd.concat([df, pd.DataFrame([mean_row, std_row])], ignore_index=True)
+                all_blocks.append(df)
+            print(df.to_string(index=False))
+        if all_blocks:
+            out = pd.concat(all_blocks, ignore_index=True)
+            if os.path.exists(result_path):
+                out.to_csv(result_path, mode="a", header=False, index=False)
+            else:
+                out.to_csv(result_path, index=False)
+            print(f"saved: {result_path}")
+
+
 def evaluate_model(cell_lines: list, model_cell_line: str, scenario, model_ids: list, base_model_dir: str, result_root: str, device, bioLLM):
     for model_id in model_ids:
         print("eval for model: ", scenario, model_id)
@@ -144,7 +204,7 @@ def evaluate_model(cell_lines: list, model_cell_line: str, scenario, model_ids: 
                         continue
                     fold_idx = int(match.group(1))
                     llm_encoder, gene_agg, predictor, ge_encoder, cnv_encoder, mu_encoder, args = load_models_from_log(model_dir, bioLLM, scenario, fold_idx, device, single_model=False)
-                    cell_line_set = ["A549", "PK1", "IPC298", "MEWO"]
+                    cell_line_set = getattr(args, "cell_line_set", None) or ["A549", "PK1", "IPC298", "MEWO"]
                     eval_loader, _ = load_data_MCL(args.dataset_path, cell_line_set, batch_size=args.batch_size, negpos=1, fold_idx=fold_idx-1)
                     # specific_cell_line = "MEWO"
                     # eval_loader, _ = load_data_SCL(args.dataset_path, specific_cell_line, batch_size=args.batch_size, negpos=1, fold_idx=fold_idx-1)
@@ -189,33 +249,3 @@ def evaluate_model(cell_lines: list, model_cell_line: str, scenario, model_ids: 
                 df.to_csv(result_path, index=False)
     
 ##########################
-
-
-# device = torch.device("cuda:1")
-# print(device)
-# # print(torch.cuda.is_available()) # If False and AssertionError: Torch not compiled with CUDA enabled: conda activate only one env
-# # # biobert_model_name = "../data/biobert-base-cased-v1.2"
-# biobert_model_name = "../data/BiomedBERT"
-# tokenizer = AutoTokenizer.from_pretrained(biobert_model_name)
-# biobert = AutoModel.from_pretrained(biobert_model_name)
-# biobert.to(device)
-# ## eval 
-# # eval_cell_lines = ["A549", "PK1", "IPC298", "MEWO"]
-# eval_cell_lines = ["22RV1", "GI1", "HS936T"]
-# model_cell_line = "mctl" # mixed_saved
-# scenario = "MCTL"
-# # eval_cell_lines = args.target_cell_lines
-# # model_cell_line = "mctl"
-# base_model_dir = f"../save/{scenario}"
-# result_root = "../results/case_study"
-# model_ids=[
-#     # '2025-07-21_10-36-43_cuda1',
-#     # '2025-07-21_13-43-34_cuda1' # freeze_llm
-#     # "2025-07-22_10-47-30_cuda1" # mask gene omics
-#     "2025-07-04_03-21-08_cuda1" 
-# ]
-# evaluate_model(eval_cell_lines, model_cell_line, scenario, model_ids, base_model_dir, result_root, device, biobert)
-
-
-########  python -m src.eval 
-
