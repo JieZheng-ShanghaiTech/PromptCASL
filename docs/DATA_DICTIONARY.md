@@ -4,11 +4,13 @@ Files shipped in `data/`. Third-party inputs are listed in the README section "E
 
 ## Cross-validation splits — `data/folds_assignment/`
 
-One row per (gene pair × cell line) instance. The file name encodes two qualifiers:
+One row per (gene pair × cell line) instance. Labels come from the SLKB database export
+(`rawSL.csv`); each row keeps the originating study's PMID in `study_origin`, together with the
+raw SL score, the statistical score and both cut-offs. The file name encodes three qualifiers:
 
 | Token | Meaning |
 |---|---|
-| `filtered` | Pairs for which both genes have expression, copy-number and mutation values, i.e. a prompt entry exists. |
+| `filtered` | Only pairs whose features can be constructed: both genes have a prompt entry (expression / copy-number / mutation values), a GenePT embedding and a PrimeKG entity. |
 | `NP1` | Negative-to-positive ratio of 1: all positives plus an equal number of negatives, sampled once with `random_state=42`. |
 | `_F` | Carries the five-fold assignment in the `fold` column (`KFold(5, shuffle=True, random_state=42)`). |
 
