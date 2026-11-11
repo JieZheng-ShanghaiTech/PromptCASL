@@ -98,9 +98,7 @@ def build_candidates():
             .first().reset_index()[['pk', 'sentence', 'pmid']])
     npmid = lm.groupby('pk').pmid.nunique().rename('n_pmid')
 
-    # ── evidence-quality provenance (mechanism is LLM-synthesized: detail=phase1_llm) ──
-    # evidence_type / confidence let us keep only solid pairs; no_sl_observed rows are NEGATIVE
-    # findings (paper reports NO synthetic lethality) and must be excluded from positive controls.
+
     qual = lm.groupby('pk').agg(
         evidence_types=('evidence_type', lambda s: ';'.join(sorted(set(s.dropna())))),
         best_confidence=('confidence', lambda s: max((_CONF_RANK.get(x, 0) for x in s.dropna()), default=0)),
