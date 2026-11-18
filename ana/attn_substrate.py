@@ -30,13 +30,12 @@ _EMPTY = np.empty(0, dtype=np.int64)
 
 
 def _select_topk(union, shared, cell_line, k):
-    """Deterministic top-k pathway selection (shared first, then |expr|, then size)."""
+    """Select shared pathways first, then descending |expr|; break ties by index."""
     if len(union) <= k:
         return union
     expr = ACTIVITY[cell_line][union, 0]
     is_shared = np.isin(union, shared)
-    size = PSIZE[union]
-    order = np.lexsort((union, size, -np.abs(expr), (~is_shared).astype(np.int8)))
+    order = np.lexsort((union, -np.abs(expr), (~is_shared).astype(np.int8)))
     return union[order[:k]]
 
 

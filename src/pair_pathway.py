@@ -54,7 +54,6 @@ class PairPathwayEvidenceBuilder:
             pw = json.load(f)
         self.pathway_names: list[str] = pw["pathway_names"]
         self.P = len(self.pathway_names)
-        self.pathway_sizes = np.asarray(pw["pathway_sizes"], dtype=np.int64)            # [P]
         self.gene2pws: dict[str, np.ndarray] = {
             g: np.asarray(sorted(idx), dtype=np.int64) for g, idx in pw["gene2pathways"].items()
         }
@@ -101,15 +100,14 @@ class PairPathwayEvidenceBuilder:
         return self.gom_by_cl[cl][j]
 
     def _select_topk(self, union: np.ndarray, shared: np.ndarray, cl: str) -> np.ndarray:
-        """Deterministic top-K: shared first, then most dysregulated, then most specific,
-        final tie-break on pathway index (total, machine-independent order)."""
+        """Deterministic top-K: shared membership, then descending |mean expression|,
+        with a fixed pathway index used only to break ties."""
         if len(union) <= self.k:
             return union
         expr = self.activity[cl][union, 0]
         is_shared = np.isin(union, shared)
-        sizes = self.pathway_sizes[union]
-        # np.lexsort: last key is primary -> (~shared) primary, then -|expr|, size, index
-        order = np.lexsort((union, sizes, -np.abs(expr), (~is_shared).astype(np.int8)))
+        # np.lexsort: last key is primary -> (~shared), then -|expr|, then index.
+        order = np.lexsort((union, -np.abs(expr), (~is_shared).astype(np.int8)))
         return union[order[:self.k]]
 
     def build_batch(self, gene_pair_list, cell_line_list, device):
